@@ -119,8 +119,4 @@ uvicorn apps.api.main:app --reload
 python scripts/train.py --train-path data/processed/train.jsonl --output-dir models/checkpoints/demo-run
 ```
 
-## 참고
 
-- 지금은 구조를 이해하기 쉽게 만드는 데 초점을 둔 초기 뼈대입니다.
-- 이 환경에서는 Python 실행 명령이 잡히지 않아 실제 실행 테스트까지는 하지 못했습니다.
-- 나중에 원하면 제가 `진짜 OpenAI 호출`, `진짜 Chroma 인덱싱`, `진짜 LoRA 학습` 코드까지 이어서 붙여드릴 수 있습니다.
