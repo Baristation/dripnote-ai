@@ -1,18 +1,13 @@
-﻿from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from fastapi import APIRouter
 
-from src.services.retrieval_service import RetrievalService
+from src.rag.pipelines.product_index_pipeline import ProductIndexPipeline
 
 
 router = APIRouter(tags=["rag"])
-retrieval_service = RetrievalService()
 
 
-class IndexRequest(BaseModel):
-    directory: str = Field(..., description="Folder path containing source files to index")
-
-
-@router.post("/rag/index")
-def build_index(request: IndexRequest) -> dict[str, str]:
-    location = retrieval_service.index_directory(request.directory)
-    return {"status": "indexed", "location": location}
+@router.post("/rag/index/products")
+def build_product_index() -> dict[str, int | str]:
+    # 백엔드 MySQL read-only 데이터를 읽어 Qdrant 상품 collection을 갱신합니다.
+    count = ProductIndexPipeline().run()
+    return {"status": "indexed", "count": count}
