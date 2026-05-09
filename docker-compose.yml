@@ -4,6 +4,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        INSTALL_EXTRAS: "[dev]"
     image: dripnote-ai:local
     env_file:
       # .env가 없어도 compose config/test를 볼 수 있게 optional로 둡니다.
@@ -11,13 +13,19 @@ services:
         required: false
     ports:
       - "8000:8000"
+    volumes:
+      # 로컬 개발에서는 Python 소스 변경을 이미지 재빌드 없이 컨테이너에 바로 반영합니다.
+      # pyproject.toml 의존성이 바뀐 경우에만 docker compose build ai-api를 다시 실행하면 됩니다.
+      - ./apps:/app/apps
+      - ./src:/app/src
+      - ./scripts:/app/scripts
     depends_on:
       # Qdrant는 healthcheck 통과 후 앱을 띄웁니다.
       qdrant:
         condition: service_healthy
       # Redis는 LLM 세션/캐시/rate limit 용도로 앱과 같이 띄웁니다.
       redis:
-        condition: service_started
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
@@ -42,10 +50,15 @@ services:
     # AI 서버 전용 Redis입니다. 백엔드 인증용 Redis와 역할을 분리합니다.
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
 volumes:

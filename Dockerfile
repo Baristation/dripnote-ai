@@ -17,9 +17,11 @@ COPY apps ./apps
 COPY src ./src
 COPY scripts ./scripts
 
-# 현재는 컨테이너 안에서 pytest/ruff도 실행할 수 있게 dev extra까지 설치합니다.
+# 로컬 개발 이미지는 INSTALL_EXTRAS="[dev]"로 pytest/ruff를 포함하고,
+# 운영 이미지는 빈 값으로 설치해 dev 의존성을 제외할 수 있습니다.
+ARG INSTALL_EXTRAS="[dev]"
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir ".[dev]"
+    && pip install --no-cache-dir ".${INSTALL_EXTRAS}"
 
 EXPOSE 8000
 
