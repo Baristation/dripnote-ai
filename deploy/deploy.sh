@@ -48,7 +48,7 @@ switch_container() {
     fi
 
     echo "Switching nginx upstream: ${current} -> ${next}"
-    sed -i "s/server ai-api-${current}:8000/server ai-api-${next}:8000/" "${NGINX_CONF}"
+    sed -i "s/set \$upstream \"ai-api-${current}:8000\"/set \$upstream \"ai-api-${next}:8000\"/" "${NGINX_CONF}"
     docker exec nginx nginx -s reload
 
     echo "Stopping ai-api-${current}"
