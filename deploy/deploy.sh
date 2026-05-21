@@ -16,14 +16,14 @@ health_check() {
 
     for attempt in $(seq 1 "${HEALTH_CHECK_ATTEMPTS}"); do
         local response
-        response=$(docker exec "${container}" curl -fsS http://127.0.0.1:8000/health 2>/dev/null && echo "200" || echo "fail")
+        response=$(docker exec "${container}" curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/health 2>/dev/null || echo "000")
 
         if [ "${response}" = "200" ]; then
             echo "Health check passed (${attempt}/${HEALTH_CHECK_ATTEMPTS})"
             return 0
         fi
 
-        echo "Health check failed (${attempt}/${HEALTH_CHECK_ATTEMPTS})"
+        echo "Health check failed (${attempt}/${HEALTH_CHECK_ATTEMPTS}), response=${response}"
         sleep "${HEALTH_CHECK_DELAY}"
     done
 
