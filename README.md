@@ -25,7 +25,7 @@ dripnote-ai/
 |  |- services/               # 여러 모듈을 묶어 실제 기능 수행
 |  |- llm/                    # LangChain, 프롬프트, 모델 클라이언트
 |  |- graph/                  # LangGraph 상태/노드/워크플로우
-|  |- rag/                    # 문서 로딩, 임베딩, 벡터 검색
+|  |- rag/                    # Qdrant 인덱싱, 검색 문서 생성, 벡터 검색
 |  |- ml/                     # 학습 데이터, 전처리, 트레이너, 평가
 |  \- db/                     # DB 관련 코드 자리
 |- scripts/                   # 학습/인덱싱 명령 실행 파일
@@ -62,16 +62,24 @@ apps/api/routes/chat.py
 ## RAG
 
 
-- `src/rag/loaders`: 문서 읽기
-- `src/rag/vectorstores`: 벡터 DB 저장/조회
-- `src/rag/pipelines/index_pipeline.py`: 문서 인덱싱
-- `src/rag/pipelines/retrieve_pipeline.py`: 질문과 비슷한 문서 검색
-- `src/services/retrieval_service.py`: 서비스 계층에서 RAG 호출
+- `src/rag/documents`: 상품 데이터를 검색용 문서와 Qdrant payload로 변환
+- `src/rag/vectorstores/qdrant_store.py`: Qdrant collection 생성, upsert, search
+- `src/rag/pipelines/product_index_pipeline.py`: 백엔드 MySQL read-only 데이터 인덱싱
+- `src/graph/workflows/rag_graph.py`: LangGraph 기반 RAG 질의 흐름
 
 
 ```text
-문서 폴더 -> load_text_files -> Chroma 저장
-질문 입력 -> similarity_search -> 관련 문맥 반환
+백엔드 MySQL:8005 read-only
+-> Product/Bean/Roaster/FlavorNote 조회
+-> 검색용 문서 생성
+-> OpenAI embedding
+-> Qdrant upsert
+
+질문 입력
+-> LangGraph
+-> Qdrant semantic search
+-> MySQL read-only 상세 보강
+-> LLM 답변
 ```
 
 ## 학습 코드
@@ -117,4 +125,9 @@ uvicorn apps.api.main:app --reload
 python scripts/train.py --train-path data/processed/train.jsonl --output-dir models/checkpoints/demo-run
 ```
 
+상품 Qdrant 인덱싱 예시:
+
+```bash
+python scripts/index_products.py
+```
 

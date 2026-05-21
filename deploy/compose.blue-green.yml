@@ -1,0 +1,23 @@
+x-app: &app
+  image: dripnote-ai:latest
+  env_file:
+    - ../.env
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  networks:
+    - ai-network
+  restart: unless-stopped
+
+services:
+  ai-api-blue:
+    <<: *app
+    container_name: ai-api-blue
+
+  ai-api-green:
+    <<: *app
+    container_name: ai-api-green
+
+networks:
+  ai-network:
+    external: true
+    name: ai-network
