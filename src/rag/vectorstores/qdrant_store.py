@@ -6,33 +6,32 @@ from src.core.config import get_settings
 _collection_ready = False
 
 
+# @lru_cache(maxsize=1): 함수를 처음 호출할 때만 실행하고 결과를 캐시합니다.
+# maxsize=1: 캐시를 1개만 유지합니다. 같은 인자로 다시 호출하면 캐시된 결과를 반환합니다.
+# QdrantClient는 HTTP 연결을 내부에 들고 있으므로 매 요청마다 새로 만들지 않고 재사용합니다.
 @lru_cache(maxsize=1)
 def get_qdrant_client():
-    # qdrant-client import를 함수 안으로 늦춰 테스트/헬스체크 import 비용을 줄입니다.
-    # 또한 Qdrant가 실제로 필요한 코드 경로에서만 외부 의존성이 로딩되어, 단순 API import가 더 가벼워집니다.
-    # QdrantClient는 내부 HTTP client를 들고 있으므로 Redis/MySQL client처럼 프로세스 안에서 재사용합니다.
     from qdrant_client import QdrantClient
 
     settings = get_settings()
     return QdrantClient(
         url=settings.qdrant_url,
+        # or None: qdrant_api_key가 빈 문자열("")이면 None으로 바꿉니다. 빈 문자열을 key로 보내면 오류가 납니다.
         api_key=settings.qdrant_api_key or None,
-        # 로컬 compose의 Qdrant 서버와 pip로 설치된 client minor version이 다를 수 있습니다.
-        # 개발 중에는 warning 때문에 로그가 묻히지 않도록 호환성 경고를 끄고, 실제 호출부에서 API 차이를 흡수합니다.
         check_compatibility=False,
     )
 
 
 def _reset_collection_ready() -> None:
-    # 검색/업서트 중 collection not found가 발생하면 준비 상태 캐시를 풀고 다시 확인하게 합니다.
+    # global: 모듈 수준 변수를 함수 안에서 수정할 때 선언합니다.
     global _collection_ready
     _collection_ready = False
 
 
 def _is_collection_missing_error(error: Exception) -> bool:
-    # qdrant-client/server 버전에 따라 collection 없음 예외 타입과 메시지가 조금씩 다를 수 있습니다.
-    # 그래서 특정 타입 하나에 묶지 않고 메시지에서 collection missing 계열만 좁게 감지합니다.
+    # str(error).lower(): 예외 메시지를 소문자로 변환해 대소문자 구분 없이 비교합니다.
     message = str(error).lower()
+    # in 연산자: 문자열이 포함되어 있으면 True입니다.
     return "collection" in message and (
         "not found" in message
         or "doesn't exist" in message
@@ -41,18 +40,17 @@ def _is_collection_missing_error(error: Exception) -> bool:
 
 
 def ensure_collection(force: bool = False) -> None:
-    # 인덱싱/검색 전에 collection이 없으면 생성합니다.
-    # Qdrant collection은 vector size가 한 번 정해지면 기존 point와 호환되어야 하므로 embedding 모델 변경 시 주의가 필요합니다.
     from qdrant_client.http.models import Distance, VectorParams
 
     global _collection_ready
+    # 이미 준비됐고 강제 재확인이 아니면 바로 반환합니다.
     if _collection_ready and not force:
         return
 
     settings = get_settings()
     client = get_qdrant_client()
     collections = client.get_collections().collections
-    # get_collections() 결과에는 전체 collection 목록이 들어오므로 이름으로 존재 여부만 확인합니다.
+    # any(조건): 하나라도 True면 True를 반환합니다. 전체를 순회할 필요 없이 첫 True에서 멈춥니다.
     exists = any(collection.name == settings.qdrant_collection for collection in collections)
 
     if exists:
@@ -63,7 +61,7 @@ def ensure_collection(force: bool = False) -> None:
         collection_name=settings.qdrant_collection,
         vectors_config=VectorParams(
             size=settings.qdrant_vector_size,
-            # 추천/검색용 embedding은 보통 벡터 방향 유사도를 보는 cosine distance를 사용합니다.
+            # Distance.COSINE: 벡터 방향 유사도. 추천/검색용 embedding에 일반적으로 사용합니다.
             distance=Distance.COSINE,
         ),
     )
@@ -71,14 +69,14 @@ def ensure_collection(force: bool = False) -> None:
 
 
 def upsert_product_vectors(points: list) -> None:
-    # product_id를 point id로 쓰기 때문에 같은 상품은 중복 생성 대신 갱신됩니다.
-    # 백엔드 상품이 수정된 뒤 재색인하면 같은 id의 vector/payload가 최신 값으로 덮어써집니다.
+    # upsert: insert + update. 같은 id가 있으면 덮어쓰고 없으면 새로 만듭니다.
     settings = get_settings()
     client = get_qdrant_client()
     ensure_collection()
     try:
         client.upsert(collection_name=settings.qdrant_collection, points=points)
     except Exception as error:
+        # collection이 없는 에러일 때만 재생성 후 재시도합니다. 다른 에러는 그대로 올립니다.
         if not _is_collection_missing_error(error):
             raise
         _reset_collection_ready()
@@ -87,14 +85,12 @@ def upsert_product_vectors(points: list) -> None:
 
 
 def _query_points(client, collection_name: str, query_vector: list[float], limit: int) -> list:
-    # 새 qdrant-client에는 query_points()가 있으므로 신규 API를 우선 사용합니다.
-    # 구버전 client에서만 search()로 fallback합니다.
+    # hasattr(객체, "속성명"): 객체에 해당 속성/메서드가 있으면 True입니다. 버전별 API 차이를 흡수할 때 씁니다.
     if hasattr(client, "query_points"):
         response = client.query_points(
             collection_name=collection_name,
             query=query_vector,
             limit=limit,
-            # payload가 있어야 다음 단계에서 productId를 꺼내 MySQL 재조회가 가능합니다.
             with_payload=True,
         )
         return response.points
@@ -108,12 +104,11 @@ def _query_points(client, collection_name: str, query_vector: list[float], limit
 
 
 def search_products(query_vector: list[float], limit: int | None = None) -> list[dict]:
-    # LangGraph retrieve 노드에서 호출하는 semantic search 진입점입니다.
-    # 입력은 사용자 질문을 embedding한 vector이고, 출력은 productId payload를 포함한 후보 상품 목록입니다.
     settings = get_settings()
     client = get_qdrant_client()
     ensure_collection()
 
+    # limit or settings.qdrant_top_k: limit이 None 또는 0이면 설정값을 씁니다.
     search_limit = limit or settings.qdrant_top_k
     try:
         hits = _query_points(
@@ -134,6 +129,8 @@ def search_products(query_vector: list[float], limit: int | None = None) -> list
             limit=search_limit,
         )
 
+    # 리스트 컴프리헨션으로 qdrant-client 객체를 dict로 변환합니다.
+    # hit.payload or {}: payload가 None이면 빈 dict를 씁니다.
     return [
         {
             "id": hit.id,

@@ -1,6 +1,8 @@
 from typing import TypedDict
 
 
+# TypedDict: dict인데 각 key의 타입을 명시할 수 있습니다.
+# total=False: 모든 key가 선택적(optional)입니다. 노드마다 state를 점진적으로 채우므로 필수값이 없어야 합니다.
 class RagState(TypedDict, total=False):
     # 사용자가 입력한 원본 질문입니다.
     question: str

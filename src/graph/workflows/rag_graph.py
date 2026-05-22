@@ -10,23 +10,20 @@ from src.graph.state.rag_state import RagState
 
 class RagGraphWorkflow:
     def __init__(self) -> None:
-        # RAG 전체 흐름을 LangGraph로 명시해 단계별 확장/테스트가 쉽도록 합니다.
-        # 각 node는 RagState dict를 받아 필요한 값을 추가한 새 state를 반환합니다.
-        # 이렇게 쪼개두면 이후 query rewrite, 권한 필터, reranker, fallback 같은 단계를 edge로 쉽게 끼울 수 있습니다.
+        # StateGraph(RagState): RagState를 공유 저장소로 쓰는 그래프를 만듭니다.
+        # 각 노드는 state dict를 받아 자기가 담당하는 key만 채운 dict를 반환하고,
+        # LangGraph가 반환값을 기존 state에 자동으로 merge합니다.
         graph = StateGraph(RagState)
 
-        # 1. normalize_query: 사용자 질문을 검색하기 쉬운 형태로 정리합니다.
+        # add_node("이름", 함수): 그래프에 처리 단계를 등록합니다.
         graph.add_node("normalize_query", normalize_query)
-        # 2. retrieve_qdrant: 질문 embedding으로 Qdrant에서 후보 상품을 찾습니다.
         graph.add_node("retrieve_qdrant", retrieve_qdrant)
-        # 3. fetch_products: 후보 product_id를 기준으로 MySQL 최신 데이터를 다시 읽습니다.
         graph.add_node("fetch_products", fetch_products)
-        # 4. build_context: LLM prompt에 넣을 context와 API source 목록을 만듭니다.
         graph.add_node("build_context", build_context)
-        # 5. generate_answer: context 기반으로 최종 답변을 생성합니다.
         graph.add_node("generate_answer", generate_answer)
 
-        # 현재는 단방향 기본 RAG 흐름입니다. 이후 intent 분기나 fallback edge를 추가할 수 있습니다.
+        # add_edge(A, B): A가 끝나면 B로 넘어갑니다.
+        # START/END는 LangGraph가 제공하는 시작/종료 지점입니다.
         graph.add_edge(START, "normalize_query")
         graph.add_edge("normalize_query", "retrieve_qdrant")
         graph.add_edge("retrieve_qdrant", "fetch_products")
@@ -34,9 +31,9 @@ class RagGraphWorkflow:
         graph.add_edge("build_context", "generate_answer")
         graph.add_edge("generate_answer", END)
 
+        # compile(): 노드와 엣지 정의를 실행 가능한 그래프로 변환합니다.
         self.app = graph.compile()
 
     def run(self, question: str) -> RagState:
-        # API/service 계층에서는 question만 넘기면 graph가 나머지 state를 채웁니다.
-        # 반환 state에는 answer, recommended_product_ids, sources 등이 포함됩니다.
+        # invoke(초기state): 그래프를 실행합니다. 각 노드가 순서대로 state를 채우고 최종 state를 반환합니다.
         return self.app.invoke({"question": question})
