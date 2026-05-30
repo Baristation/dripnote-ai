@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from src.core.security import require_internal_key
 from src.services.chat_service import ChatService
 
 
@@ -27,7 +28,7 @@ class ChatResponse(BaseModel):
     sources: list[ChatSource] = Field(default_factory=list)
 
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse, dependencies=[Depends(require_internal_key)])
 def chat(request: ChatRequest) -> ChatResponse:
     result = chat_service.generate_reply(message=request.message)
     return ChatResponse(**result)

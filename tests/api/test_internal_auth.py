@@ -11,6 +11,11 @@ def test_product_index_requires_internal_key() -> None:
     assert response.status_code == 403
 
 
+def test_chat_requires_internal_key() -> None:
+    response = client.post("/api/chat", json={"message": "hello"})
+    assert response.status_code == 403
+
+
 def test_train_requires_internal_key() -> None:
     response = client.post(
         "/api/train",

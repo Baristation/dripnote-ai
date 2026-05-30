@@ -1,1 +1,70 @@
-﻿"""Database models."""
+"""SQLAlchemy read-only mirrors for backend-owned DB tables."""
+
+from src.db.models.base import Base
+from src.db.models.enums import (
+    BookingStatus,
+    DifficultyLevel,
+    FlavorCategory,
+    ImageType,
+    LessonCategory,
+    PaymentProvider,
+    PaymentStatus,
+    Region,
+    RoastingLevel,
+    ScheduleStatus,
+    UserProvider,
+    UserRole,
+)
+from src.db.models.lesson import (
+    Booking,
+    Lesson,
+    LessonCurriculum,
+    LessonImage,
+    LessonReview,
+    LessonSchedule,
+)
+from src.db.models.product import (
+    Bean,
+    BeanProduct,
+    FlavorNote,
+    Product,
+    ProductBookmark,
+    ProductFlavorNote,
+    ProductImage,
+    ProductReview,
+    Roaster,
+)
+from src.db.models.user import Career, User
+
+__all__ = [
+    "Base",
+    "Bean",
+    "BeanProduct",
+    "Booking",
+    "BookingStatus",
+    "Career",
+    "DifficultyLevel",
+    "FlavorCategory",
+    "FlavorNote",
+    "ImageType",
+    "Lesson",
+    "LessonCategory",
+    "LessonCurriculum",
+    "LessonImage",
+    "LessonReview",
+    "LessonSchedule",
+    "PaymentProvider",
+    "PaymentStatus",
+    "Product",
+    "ProductBookmark",
+    "ProductFlavorNote",
+    "ProductImage",
+    "ProductReview",
+    "Region",
+    "Roaster",
+    "RoastingLevel",
+    "ScheduleStatus",
+    "User",
+    "UserProvider",
+    "UserRole",
+]

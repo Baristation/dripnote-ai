@@ -7,7 +7,7 @@ from langgraph.prebuilt import create_react_agent
 from src.llm.clients.openai_client import build_chat_model
 from src.llm.prompts.agent_prompt import AGENT_SYSTEM_PROMPT
 from src.llm.tools.doc_search_tool import search_website_docs
-from src.llm.tools.product_search_tool import PRODUCTS_META_END, PRODUCTS_META_START, search_products
+from src.llm.tools.product_search_tool import search_products
 
 _META_PATTERN = re.compile(
     r"\[PRODUCTS_META\]\n(.*?)\n\[/PRODUCTS_META\]",
