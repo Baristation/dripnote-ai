@@ -9,6 +9,48 @@ HEALTH_CHECK_ATTEMPTS="${HEALTH_CHECK_ATTEMPTS:-12}"
 HEALTH_CHECK_DELAY="${HEALTH_CHECK_DELAY:-5}"
 BEFORE_HEALTH_CHECK_DELAY="${BEFORE_HEALTH_CHECK_DELAY:-15}"
 
+log_section() {
+    local title="$1"
+
+    echo ""
+    echo "========== ${title} =========="
+}
+
+get_runtime_upstream() {
+    docker exec nginx nginx -T 2>/dev/null | grep -oE 'ai-api-(blue|green):8000' | head -n 1 || true
+}
+
+log_runtime_state() {
+    local label="$1"
+
+    log_section "${label}"
+    echo "Compose file: ${COMPOSE_FILE}"
+    echo "Deploy script nginx config: ${NGINX_CONF}"
+
+    echo "Deploy script nginx config upstream:"
+    grep -E 'ai-api-(blue|green):8000' "${NGINX_CONF}" || true
+
+    echo "Runtime nginx upstream:"
+    get_runtime_upstream
+
+    echo "App containers:"
+    docker ps -a --format "table {{.Names}}\t{{.Status}}" | grep -E 'NAMES|ai-api-' || true
+}
+
+assert_runtime_upstream() {
+    local expected_color="$1"
+    local runtime_upstream
+
+    runtime_upstream="$(get_runtime_upstream)"
+    if [ "${runtime_upstream}" != "ai-api-${expected_color}:8000" ]; then
+        echo "Runtime nginx upstream mismatch"
+        echo "Expected: ai-api-${expected_color}:8000"
+        echo "Actual: ${runtime_upstream:-<empty>}"
+        log_runtime_state "Runtime state after upstream mismatch"
+        exit 1
+    fi
+}
+
 opposite_color() {
     local color="$1"
 
@@ -79,6 +121,7 @@ set_nginx_upstream() {
     sed -i -E "s/ai-api-(blue|green):8000/ai-api-${color}:8000/g" "${NGINX_CONF}"
     docker exec nginx nginx -t
     docker exec nginx nginx -s reload
+    assert_runtime_upstream "${color}"
 }
 
 find_healthy_running_color() {
@@ -96,6 +139,8 @@ find_healthy_running_color() {
 switch_container() {
     local current="$1"
     local next="$2"
+
+    log_runtime_state "Before starting ai-api-${next}"
 
     echo "Starting ai-api-${next}"
     docker compose -f "${COMPOSE_FILE}" up -d "ai-api-${next}"
@@ -116,11 +161,15 @@ switch_container() {
 
     echo "Switching nginx upstream: ${current} -> ${next}"
     set_nginx_upstream "${next}"
+    log_runtime_state "After switching nginx upstream to ai-api-${next}"
 
     echo "Stopping ai-api-${current}"
     docker stop "ai-api-${current}" 2>/dev/null || true
     docker rm "ai-api-${current}" 2>/dev/null || true
+    log_runtime_state "After stopping ai-api-${current}"
 }
+
+log_runtime_state "Initial runtime state"
 
 current="$(get_nginx_upstream_color || true)"
 
@@ -150,4 +199,5 @@ fi
 
 switch_container "${current}" "${next}"
 
+log_runtime_state "Final runtime state"
 echo "Deployment completed successfully"
