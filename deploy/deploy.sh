@@ -4,6 +4,7 @@ set -euo pipefail
 
 COMPOSE_FILE="${COMPOSE_FILE:-$(dirname "$0")/compose.blue-green.yml}"
 NGINX_CONF="${NGINX_CONF:-$(dirname "$0")/../nginx/nginx.conf}"
+PROD_COMPOSE_FILE="${PROD_COMPOSE_FILE:-$(dirname "$0")/../docker-compose.prod.yml}"
 
 HEALTH_CHECK_ATTEMPTS="${HEALTH_CHECK_ATTEMPTS:-12}"
 HEALTH_CHECK_DELAY="${HEALTH_CHECK_DELAY:-5}"
@@ -25,6 +26,7 @@ log_runtime_state() {
 
     log_section "${label}"
     echo "Compose file: ${COMPOSE_FILE}"
+    echo "Production compose file: ${PROD_COMPOSE_FILE}"
     echo "Deploy script nginx config: ${NGINX_CONF}"
 
     echo "Deploy script nginx config upstream:"
@@ -119,8 +121,13 @@ set_nginx_upstream() {
     fi
 
     sed -i -E "s/ai-api-(blue|green):8000/ai-api-${color}:8000/g" "${NGINX_CONF}"
+
+    # The nginx container bind-mounts nginx.conf as a single file.
+    # GitHub Actions checkout can replace that file's inode, leaving a long-lived
+    # container reading the old mounted file even after the host path is edited.
+    # Recreating nginx forces Docker to bind-mount the current config file.
+    docker compose -f "${PROD_COMPOSE_FILE}" up -d --force-recreate nginx
     docker exec nginx nginx -t
-    docker exec nginx nginx -s reload
     assert_runtime_upstream "${color}"
 }
 
