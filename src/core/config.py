@@ -52,7 +52,11 @@ class Settings(BaseSettings):
 
     # SettingsConfigDict는 BaseSettings에게 .env 파일을 읽으라고 알려주는 설정입니다.
     # 환경변수 값이 있으면 기본값보다 우선하고, 문자열 숫자도 int 필드에 맞게 자동 변환됩니다.
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
